@@ -1,36 +1,35 @@
-// Copyright (c) 2012-2016 The Revel Framework Authors, All rights reserved.
-// Revel Framework source code and usage is governed by a MIT style
-// license that can be found in the LICENSE file.
-
 package revel
 
 import (
 	"runtime/debug"
 )
 
-// PanicFilter wraps the action invocation in a protective defer blanket that
-// converts panics into 500 error pages.
+// PanicFilter wraps the action invocation in a protective defer block
+// that converts panics into 500 error pages.
 func PanicFilter(c *Controller, fc []Filter) {
 	defer func() {
-		if err := recover(); err != nil {
-			handleInvocationPanic(c, err)
+		if panicErr := recover(); panicErr != nil {
+			handleInvocationPanic(c, panicErr)
 		}
 	}()
 	fc[0](c, fc[1:])
 }
 
-// This function handles a panic in an action invocation.
-// It cleans up the stack trace, logs it, and displays an error page.
-func handleInvocationPanic(c *Controller, err interface{}) {
-	error := NewErrorFromPanic(err)
-	if error == nil && DevMode {
-		// Only show the sensitive information in the debug stack trace in development mode, not production
-		ERROR.Print(err, "\n", string(debug.Stack()))
+// handleInvocationPanic processes a panic in an action invocation.
+// It logs the panic and displays an error page, showing the stack trace
+// in development mode, while being more secure in production.
+func handleInvocationPanic(c *Controller, panicErr interface{}) {
+	panickedError := NewErrorFromPanic(panicErr)
+
+	if panickedError == nil && DevMode {
+		// In development mode, show full stack trace and error details.
+		ERROR.Print(panicErr, "\n", string(debug.Stack()))
 		c.Response.Out.WriteHeader(500)
 		_, _ = c.Response.Out.Write(debug.Stack())
 		return
 	}
 
-	ERROR.Print(err, "\n", error.Stack)
-	c.Result = c.RenderError(error)
+	// In production, we log the error and show a generic error page.
+	ERROR.Print(panicErr, "\n", panickedError.Stack)
+	c.Result = c.RenderError(panickedError)
 }
